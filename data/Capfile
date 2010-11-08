@@ -1,0 +1,63 @@
+###
+# Upload the data to an EBS volume and snapshot it.
+
+require 'catpaws'
+
+#generic settings
+set :aws_access_key,  ENV['AMAZON_ACCESS_KEY']
+set :aws_secret_access_key , ENV['AMAZON_SECRET_ACCESS_KEY']
+set :ec2_url, ENV['EC2_URL']
+set :ssh_options, { :user => "ubuntu", :keys=>[ENV['EC2_KEYFILE']]}
+set :key, ENV['EC2_KEY']
+set :key_file, ENV['EC2_KEYFILE']
+set :ami, 'ami-7e5c690a' #32-bit Ubuntu Maverick, eu-west-1
+set :instance_type, 'm1.small'
+set :working_dir, '/mnt/work'
+set :availability_zone, 'eu-west-1a'  
+set :nhosts, 1
+set :group_name, 'clores_vs_florescre_rnaseq'
+set :snap_id, `cat SNAPID`.chomp #ec2 eu-west-1 
+set :vol_id, `cat VOLUMEID`.chomp #empty until you've created a new volume
+set :ebs_size, 40  #BAM files are massive
+set :dev, '/dev/sdf'
+set :mount_point, '/mnt/data'
+
+
+
+#make a new EBS volume from this snap 
+#cap EBS:create
+
+#and mount your EBS
+#cap EBS:attach
+#cap EBS:format_xfs
+#cap EBS:mount_xfs
+
+
+files = Dir["*.bam"]
+
+desc "Upload bam files"
+task :upload_data, :roles => group_name do
+  upload("README", "#{mount_point}/README")
+  files.each{|f| 
+    upload(f, "#{mount_point}/#{f}")
+  }
+end
+before 'upload_data', 'EC2:start'
+
+
+desc "Index bam files"
+task :index_bam, :roles => group_name do
+  sudo "apt-get -y install samtools" 
+  files.each{|f| 
+    run "cd #{mount_point} && samtools index #{f}"
+  }
+end
+before 'index_bam', 'EC2:start'
+
+
+# cap EBS:snapshot
+# cap EBS:unmount
+# cap EBS:detach
+# cap EBS:delete 
+# cap EC2:stop
+
